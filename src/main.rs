@@ -72,31 +72,36 @@ fn read_image_grid(image_grid: Vec<Rgb<u8>>, char_width: u32, char_height: u32) 
     }
 }
 
-fn create_mat(image_grid: Vec<Rgb<u8>>, char_width: u32, char_height: u32, eles: [u8; 9], name: &str) {
+fn create_mat(image_grid: Vec<Rgb<u8>>, char_width: u32, char_height: u32, eles: &[u8], name: &str) {
 
     // Split image_grid into chunks representing individual images
     let images: Vec<&[Rgb<u8>]> = image_grid.chunks((char_width * char_height) as usize).collect();
 
     // The Mat
     let mat: Vec<Rgb<u8>> = Vec::with_capacity(eles.len() * (char_width*char_height) as usize);
+    let mat_dim = (((eles.len()) as f32).sqrt().ceil()) as u32;
+    println!("Dimension = {}", mat_dim);
+    let mat_pixel_width = char_width * mat_dim;
+    let mat_pixel_height = char_height * mat_dim;
 
     // Output Image
-    let mat_pixel_width = char_width * 3;
-    let mat_pixel_height = char_height * 3;
+
     let mut img_buffer = ImageBuffer::new(mat_pixel_width, mat_pixel_height);
 
     // Fill Out Mat Patterns
     let mut p1 = 0;
     let mut p2 = 0;
-    for (idx, ele) in eles.iter().enumerate() {
-        let image_chunk = images[*ele as usize];
+    print!("Input: ");
+    for (idx, &ele) in eles.iter().enumerate() {
+        print!("{} ", ele);
+        let image_chunk = images[ele as usize];
         for (i, pixel) in image_chunk.iter().enumerate() {
             let x = (i % char_height as usize) as u32;
             let y = (i / char_width as usize) as u32;
             img_buffer.put_pixel(x+p1*char_width, y+p2*char_height, *pixel);
         }
 
-        if ( p1 == 2 ) {
+        if ( p1 == (mat_dim-1) ) {
             p1 = 0;
             p2 += 1;
         }
@@ -104,14 +109,11 @@ fn create_mat(image_grid: Vec<Rgb<u8>>, char_width: u32, char_height: u32, eles:
             p1 += 1;
         }
     }
-
+    print!("\n");
+    
     // Save the ImageBuffer as an image file (e.g., PNG)
     let file_path = format!("{}.png", name);
     img_buffer.save(file_path).expect("Failed to save image chunk");
-}
-
-fn encoder(input: &str) -> [u8; 9] {
-    return [8, 16, 22, 34, 58, 100, 107, 112, 116];
 }
 
 fn main() {
@@ -140,7 +142,7 @@ fn main() {
         eprintln!("Failed to create directory: {}", err);
     }
     let grid: Vec<Rgb<u8>> = load_image_grid("base16-mat.png", 18, 18, 1);
-    let input = encoder("test");
-    create_mat(grid, 16, 16, input, "test");
+    let input = args[1].as_str().as_bytes();
+    create_mat(grid, 16, 16, input, args[1].as_str());
 
 }
