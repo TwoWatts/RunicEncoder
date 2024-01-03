@@ -4,6 +4,21 @@ use image::{DynamicImage, GenericImageView, Rgb};
 use image::{ImageBuffer};
 use std::fs;
 
+fn pick_color(data: &[u8]) -> (u8, u8, u8) {
+    if data.is_empty() {
+        return (0, 0, 0);
+    }
+
+    // Calculate a hash from the input data
+    let hash = hex_digest(Algorithm::SHA256, data);
+
+    // Take three pairs of characters from the hash string and convert them to u8 values
+    let color1 = u8::from_str_radix(&hash[0..2], 16).unwrap_or(0);
+    let color2 = u8::from_str_radix(&hash[2..4], 16).unwrap_or(0);
+    let color3 = u8::from_str_radix(&hash[4..6], 16).unwrap_or(0);
+
+    (color1, color2, color3)
+}
 
 pub fn load_image_grid(path: &str, rect_width: u32, rect_height: u32, border_width: u32) -> Vec<Rgb<u8>> {
     // Open Image File
@@ -58,7 +73,7 @@ pub fn read_image_grid(image_grid: Vec<Rgb<u8>>, char_width: u32, char_height: u
     let images: Vec<&[Rgb<u8>]> = image_grid.chunks((char_width * char_height) as usize).collect();
     //println!("Output Grid Length = {}", images.len());
 
-    // // Write each image chunk to be its own separate file.
+    // Write each image chunk to be its own separate file.
     for (index, image_chunk) in images.iter().enumerate() {
         // Create an ImageBuffer from the Rgb<u8> slice
         let mut img_buffer = ImageBuffer::new(char_width, char_height);
@@ -75,47 +90,92 @@ pub fn read_image_grid(image_grid: Vec<Rgb<u8>>, char_width: u32, char_height: u
     }
 }
 
-fn pick_color(data: &[u8]) -> (u8, u8, u8) {
-    if data.is_empty() {
-        return (0, 0, 0);
+fn spiral_walker(dim: u32) -> Vec<(u32,u32)> {
+    let tot_steps = dim * dim;
+    let mut step_count = 0;
+    let mut path: Vec<(u32, u32)>= Vec::with_capacity(tot_steps as usize);
+
+    // Boundaries
+    let mut top = 0;
+    let mut bottom = dim-1;
+    let mut left = 0;
+    let mut right = dim-1;
+
+    loop {
+
+        for i in (left..=right).rev() {
+            path.push((i, top));
+            step_count+=1;
+        }
+        for i in (top+1)..=bottom {
+            path.push((left, i));
+            step_count+=1;
+        }
+        for i in (left+1)..=right {
+            path.push((i, bottom));
+            step_count+=1;
+        }
+        for i in (top+1..bottom).rev() {
+            path.push((right, i));
+            step_count+=1;
+        }
+
+        if step_count >= tot_steps {
+            break;
+        }
+
+        bottom-=1;
+        top+=1;
+        left+=1;
+        right-=1;
     }
 
-    // Calculate a hash from the input data
-    let hash = hex_digest(Algorithm::SHA256, data);
-
-    // Take three pairs of characters from the hash string and convert them to u8 values
-    let color1 = u8::from_str_radix(&hash[0..2], 16).unwrap_or(0);
-    let color2 = u8::from_str_radix(&hash[2..4], 16).unwrap_or(0);
-    let color3 = u8::from_str_radix(&hash[4..6], 16).unwrap_or(0);
-
-    (color1, color2, color3)
+    return path;
 }
 
-pub fn create_mat(image_grid: Vec<Rgb<u8>>, char_width: u32, char_height: u32, eles: &[u8], name: &str) {
+pub fn create_mat(image_grid: Vec<Rgb<u8>>, char_width: u32, char_height: u32, input: &[u8], name: &str) {
 
     // Split image_grid into chunks representing individual images
     let images: Vec<&[Rgb<u8>]> = image_grid.chunks((char_width * char_height) as usize).collect();
 
     // The Mat
-    let mat: Vec<Rgb<u8>> = Vec::with_capacity(eles.len() * (char_width*char_height) as usize);
-    let mat_dim = (((eles.len()) as f32).sqrt().ceil()) as u32;
+    let mat_dim = (((input.len()) as f32).sqrt().ceil()) as u32;
     println!("Dimension = {}", mat_dim);
     let mat_pixel_width = char_width * mat_dim;
     let mat_pixel_height = char_height * mat_dim;
 
+    let imperfection = (mat_dim*mat_dim) as usize - input.len();
+    let mut ideal_input = input.to_vec();
+    if imperfection > 0 {
+        for i in 0..imperfection {
+            ideal_input.push(' ' as u8);
+        }
+    }
+
     // Color
-    let (color1, color2, color3) = pick_color(eles);
+    let (color1, color2, color3) = pick_color(input);
 
     // Output Image
     let mut img_buffer = ImageBuffer::new(mat_pixel_width, mat_pixel_height);
 
-    // Fill Out Mat Patterns
-    let mut p1 = 0;
-    let mut p2 = 0;
-    print!("Input: ");
-    for (idx, &ele) in eles.iter().enumerate() {
+    /*========================
+     * FILL OUT MAT PATTERNS =
+     *========================*/
+    // Find Out Where Each Pattern Goes
+    let pos = spiral_walker(mat_dim);
+
+    // Check Spiral
+    // let answer = spiral_walker(mat_dim);
+    // for item in answer {
+    //     println!("{:?}", item);
+    // }
+
+    // Iterate over each input byte.
+    for (idx, &ele) in ideal_input.iter().enumerate() {
         print!("{} ", ele);
+        // Map each input byte to correct image.
         let image_chunk = images[ele as usize];
+        // Fill out image pixels.
         for (i, &pixel) in image_chunk.iter().enumerate() {
             let x = (i % char_height as usize) as u32;
             let y = (i / char_width as usize) as u32;
@@ -136,19 +196,13 @@ pub fn create_mat(image_grid: Vec<Rgb<u8>>, char_width: u32, char_height: u32, e
             } else {
                 rgb_val[2] = !color3;
             }
-            img_buffer.put_pixel(x+p1*char_width, y+p2*char_height, Rgb(rgb_val));
-        }
-
-        if ( p1 == (mat_dim-1) ) {
-            p1 = 0;
-            p2 += 1;
-        }
-        else {
-            p1 += 1;
+            img_buffer.put_pixel(x+pos[idx].0*char_width, y+pos[idx].1*char_height, Rgb(rgb_val));
         }
     }
+
+
     print!("\n");
-    
+
     // Save the ImageBuffer as an image file (e.g., PNG)
     let file_path = format!("{}.png", name);
     img_buffer.save(file_path).expect("Failed to save image chunk");

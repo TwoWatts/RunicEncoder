@@ -1,6 +1,5 @@
-
-use std::fs;
 mod mat;
+use std::fs;
 use image::{Rgb};
 
 fn main() {
