@@ -41,7 +41,7 @@ pub fn load_image_grid(path: &str, rect_width: u32, rect_height: u32, border_wid
     let char_width = rect_width - 2 * border_width;
     let char_height = rect_height - 2 * border_width;
 
-    println!("Image Width = {}\nImage Height = {}\nPixels = {}\nRectangles = {}", width, height, n_pixels, n_rectangles);
+    //println!("Image Width = {}\nImage Height = {}\nPixels = {}\nRectangles = {}", width, height, n_pixels, n_rectangles);
 
     // Allocate Memory For Image Grid
     let mut image_grid: Vec<Rgb<u8>> = Vec::with_capacity(n_pixels as usize);
@@ -140,7 +140,7 @@ pub fn create_mat(image_grid: Vec<Rgb<u8>>, char_width: u32, char_height: u32, i
 
     // The Mat
     let mat_dim = (((input.len()) as f32).sqrt().ceil()) as u32;
-    println!("Dimension = {}", mat_dim);
+    //println!("Dimension = {}", mat_dim);
     let mat_pixel_width = char_width * mat_dim;
     let mat_pixel_height = char_height * mat_dim;
 
@@ -172,7 +172,7 @@ pub fn create_mat(image_grid: Vec<Rgb<u8>>, char_width: u32, char_height: u32, i
 
     // Iterate over each input byte.
     for (idx, &ele) in ideal_input.iter().enumerate() {
-        print!("{} ", ele);
+        //print!("{} ", ele);
         // Map each input byte to correct image.
         let image_chunk = images[ele as usize];
         // Fill out image pixels.
@@ -199,9 +199,6 @@ pub fn create_mat(image_grid: Vec<Rgb<u8>>, char_width: u32, char_height: u32, i
             img_buffer.put_pixel(x+pos[idx].0*char_width, y+pos[idx].1*char_height, Rgb(rgb_val));
         }
     }
-
-
-    print!("\n");
 
     // Save the ImageBuffer as an image file (e.g., PNG)
     let file_path = format!("{}.png", name);
