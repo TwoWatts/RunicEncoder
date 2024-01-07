@@ -133,74 +133,94 @@ fn spiral_walker(dim: u32) -> Vec<(u32,u32)> {
     return path;
 }
 
-pub fn create_mat(image_grid: Vec<Rgb<u8>>, char_width: u32, char_height: u32, input: &[u8], name: &str) {
-
-    // Split image_grid into chunks representing individual images
-    let images: Vec<&[Rgb<u8>]> = image_grid.chunks((char_width * char_height) as usize).collect();
-
-    // The Mat
-    let mat_dim = (((input.len()) as f32).sqrt().ceil()) as u32;
-    //println!("Dimension = {}", mat_dim);
-    let mat_pixel_width = char_width * mat_dim;
-    let mat_pixel_height = char_height * mat_dim;
-
-    let imperfection = (mat_dim*mat_dim) as usize - input.len();
-    let mut ideal_input = input.to_vec();
-    if imperfection > 0 {
-        for i in 0..imperfection {
-            ideal_input.push(' ' as u8);
-        }
-    }
-
-    // Color
-    let (color1, color2, color3) = pick_color(input);
-
-    // Output Image
-    let mut img_buffer = ImageBuffer::new(mat_pixel_width, mat_pixel_height);
-
-    /*========================
-     * FILL OUT MAT PATTERNS =
-     *========================*/
-    // Find Out Where Each Pattern Goes
-    let pos = spiral_walker(mat_dim);
-
-    // Check Spiral
-    // let answer = spiral_walker(mat_dim);
-    // for item in answer {
-    //     println!("{:?}", item);
-    // }
-
-    // Iterate over each input byte.
-    for (idx, &ele) in ideal_input.iter().enumerate() {
-        //print!("{} ", ele);
-        // Map each input byte to correct image.
-        let image_chunk = images[ele as usize];
-        // Fill out image pixels.
-        for (i, &pixel) in image_chunk.iter().enumerate() {
-            let x = (i % char_height as usize) as u32;
-            let y = (i / char_width as usize) as u32;
-            let mut rgb_val = pixel.0;
-
-            if (rgb_val[0] != 0xFF) {
-                rgb_val[0] = color1;
-            } else {
-                rgb_val[0] = !color1;
-            }
-            if (rgb_val[1] != 0xFF) {
-                rgb_val[1] = color2;
-            } else {
-                rgb_val[1] = !color2;
-            }
-            if (rgb_val[2] != 0xFF) {
-                rgb_val[2] = color3;
-            } else {
-                rgb_val[2] = !color3;
-            }
-            img_buffer.put_pixel(x+pos[idx].0*char_width, y+pos[idx].1*char_height, Rgb(rgb_val));
-        }
-    }
-
-    // Save the ImageBuffer as an image file (e.g., PNG)
-    let file_path = format!("{}.png", name);
-    img_buffer.save(file_path).expect("Failed to save image chunk");
+pub struct Mat {
+    font: Vec<Rgb<u8>>,
+    char_width: u32,
+    char_height: u32,
 }
+
+impl Mat {
+
+    pub fn new(char_width: u32, char_height: u32, border_width: u32) -> Self {
+        // Parse font characters as grid.
+        let grid: Vec<Rgb<u8>> = load_image_grid("res/base16-mat.png", char_width + 2 * border_width, char_height + 2 * border_width, border_width);
+
+        let mat = Mat {
+            font: grid,
+            char_width,
+            char_height,
+        };
+
+        mat
+    }
+
+    pub fn export(&self, input: &[u8], name: &str) {
+        // The Mat
+        let mat_dim = (((input.len()) as f32).sqrt().ceil()) as u32;
+        let mat_pixel_width = self.char_width * mat_dim;
+        let mat_pixel_height = self.char_height * mat_dim;
+        let images: Vec<&[Rgb<u8>]> = self.font.chunks((self.char_width * self.char_height) as usize).collect();
+        let imperfection = (mat_dim*mat_dim) as usize - input.len();
+        let mut ideal_input = input.to_vec();
+        if imperfection > 0 {
+            for i in 0..imperfection {
+                ideal_input.push(' ' as u8);
+            }
+        }
+    
+        // Color
+        let (color1, color2, color3) = pick_color(input);
+    
+        // Output Image
+        let mut img_buffer = ImageBuffer::new(mat_pixel_width as u32, mat_pixel_height as u32);
+    
+        /*========================
+         * FILL OUT MAT PATTERNS =
+         *========================*/
+        // Find Out Where Each Pattern Goes
+        let pos = spiral_walker(mat_dim);
+    
+        // Check Spiral
+        // let answer = spiral_walker(mat_dim);
+        // for item in answer {
+        //     println!("{:?}", item);
+        // }
+    
+        // Iterate over each input byte.
+        for (idx, &ele) in ideal_input.iter().enumerate() {
+            //print!("{} ", ele);
+            // Map each input byte to correct image.
+            let image_chunk = images[ele as usize];
+            // Fill out image pixels.
+            for (i, &pixel) in image_chunk.iter().enumerate() {
+                let x = (i % self.char_height as usize) as u32;
+                let y = (i / self.char_width as usize) as u32;
+                let mut rgb_val = pixel.0;
+    
+                if rgb_val[0] != 0xFF {
+                    rgb_val[0] = color1;
+                } else {
+                    rgb_val[0] = !color1;
+                }
+                if rgb_val[1] != 0xFF {
+                    rgb_val[1] = color2;
+                } else {
+                    rgb_val[1] = !color2;
+                }
+                if rgb_val[2] != 0xFF {
+                    rgb_val[2] = color3;
+                } else {
+                    rgb_val[2] = !color3;
+                }
+                img_buffer.put_pixel(x+pos[idx].0*self.char_width, y+pos[idx].1*self.char_height, Rgb(rgb_val));
+            }
+        }
+    
+        // Save the ImageBuffer as an image file (e.g., PNG)
+        let file_path = format!("{}.png", name);
+        img_buffer.save(file_path).expect("Failed to save image chunk");
+    }
+
+}
+
+

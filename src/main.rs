@@ -3,7 +3,7 @@ mod cli;
 use std::io::{self, Write};
 use image::Rgb;
 
-use crate::cli::{accept_digit_input, accept_string_input};
+use crate::mat::Mat;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -22,7 +22,7 @@ fn main() {
     println!("[2] Quit.");
 
     // Accept User Input
-    let option = accept_digit_input();
+    let option = cli::accept_digit_input();
     
     if option == 0 {
         // Ask User For Rune Seed
@@ -30,19 +30,19 @@ fn main() {
         io::stdout().flush().unwrap();
 
         // Accept User Input Seed
-        let text = accept_string_input();
+        let text = cli::accept_string_input();
         let text_bytes = text.as_bytes();
 
         //println!("You entered: {:?}", text_bytes);
+        let mat = Mat::new(16, 16, 1);
+        mat.export(text_bytes, &text);
         println!("Rune Succeeded! See \"{}.png\"", text);
-        let grid: Vec<Rgb<u8>> = mat::load_image_grid("res/base16-mat.png", 18, 18, 1);
-        mat::create_mat(grid, 16, 16, text_bytes, &text);
     }
     else if option == 1 {
         // Ask User For Rune Name
         println!("Which rune should be decoded?");
         let avail_runes = cli::collect_wd_runes();
-        let rune_idx: usize = accept_digit_input() as usize;
+        let rune_idx: usize = cli::accept_digit_input() as usize;
 
         if rune_idx > 0 && rune_idx < avail_runes.len() { 
             let rune = &avail_runes[rune_idx];
