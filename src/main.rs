@@ -50,7 +50,6 @@ fn main() {
             println!("SELECTED: Rune {}", rune_idx);
             let _mat = Mat::read(rune, 16, 16, 1);
         }
-
     }
     else if option == 2 {
         return;
@@ -59,4 +58,6 @@ fn main() {
         println!("Unknown option selected. Exiting program.");
     }
 
+    let mut pause: String = String::new();
+    io::stdin().read_line(&mut pause).expect("Failed to read line");
 }
