@@ -34,9 +34,10 @@ fn main() {
         let text_bytes = text.as_bytes();
 
         //println!("You entered: {:?}", text_bytes);
-        let mat = Mat::new(16, 16, 1);
-        mat.export(text_bytes, &text);
-        println!("Rune Succeeded! See \"{}.png\"", text);
+        let mut mat = Mat::new(16, 16, 1);
+        mat.input(text);
+        let name = mat.get_name();
+        mat.export(name.as_str());
     }
     else if option == 1 {
         // Ask User For Rune Name
@@ -44,8 +45,10 @@ fn main() {
         let avail_runes = cli::collect_wd_runes();
         let rune_idx: usize = cli::accept_digit_input() as usize;
 
-        if rune_idx > 0 && rune_idx < avail_runes.len() { 
+        if rune_idx >= 0 && rune_idx < avail_runes.len() { 
             let rune = &avail_runes[rune_idx];
+            println!("SELECTED: Rune {}", rune_idx);
+            let _mat = Mat::read(rune, 16, 16, 1);
         }
 
     }

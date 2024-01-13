@@ -4,6 +4,10 @@ use image::{DynamicImage, GenericImageView, Rgb};
 use image::{ImageBuffer};
 use std::fs;
 
+fn ix2d(ele_per_row: u32, x: u32, y: u32) -> usize {
+    return ( (ele_per_row as usize) * ((y) as usize)) + ((x) as usize);
+}
+
 fn pick_color(data: &[u8]) -> (u8, u8, u8) {
     if data.is_empty() {
         return (0, 0, 0);
@@ -137,6 +141,11 @@ pub struct Mat {
     font: Vec<Rgb<u8>>,
     char_width: u32,
     char_height: u32,
+    dim: u32,
+    input: String,
+    name: String,
+    primary: (u8, u8, u8),
+    secondary: (u8, u8, u8)
 }
 
 impl Mat {
@@ -147,16 +156,70 @@ impl Mat {
 
         let mat = Mat {
             font: grid,
-            char_width,
-            char_height,
+            char_width: char_width,
+            char_height: char_height,
+            dim: 0,
+            input: "".to_string(),
+            name: "".to_string(),
+            primary: (0, 0, 0),
+            secondary: (0, 0, 0),
         };
-
         mat
     }
 
-    pub fn export(&self, input: &[u8], name: &str) {
+    pub fn read(path: &String, char_width: u32, char_height: u32, border_width: u32) -> Self {
+        let mut m = Mat::new(char_width, char_height, border_width);
+        let buf = image::open(path).unwrap().into_rgb8();
+        let (width, height) = buf.dimensions();
+        let pri_color = buf.get_pixel(char_width / 2, char_height / 2);
+        let bgd_color = buf.get_pixel(1, 2).0;
+        m.dim = ((width as f32 / char_width as f32).ceil()) as u32;
+        m.primary = (pri_color[0], pri_color[1], pri_color[2]);
+        m.secondary = (bgd_color[0], bgd_color[1], bgd_color[2]);
+
+        let answer = m.decode(path.as_str());
+        println!("Decoded Text: \"{}\".", String::from_utf8_lossy(&answer).trim());
+        m
+    }
+
+    pub fn get_input(&self) -> &String {
+        return &self.input;
+    }
+
+    pub fn input(&mut self, input: String) {
+        // Input
+        self.input = input;
+
+        // Name
+        self.name = self.input.replace(" ", "_");
+        self.name.push_str(".rune");
+
+        // Mat Dimension
+        self.dim = (((self.input.len()) as f32).sqrt().ceil()) as u32;
+
+        // Color
+        let (color1, color2, color3) = pick_color(self.input.as_bytes());
+        self.primary.0 = color1;
+        self.primary.1 = color2;
+        self.primary.2 = color3;
+        self.secondary.0 = !color1;
+        self.secondary.1 = !color2;
+        self.secondary.2 = !color3;
+    }
+
+    pub fn get_name(&self) -> String {
+        return self.name.clone();
+    }
+
+    pub fn export(&mut self, name: &str) {
+        if self.input == "" {
+            println!("No input provided to Mat \"{}\".", name);
+            return;
+        }
+        let input = self.input.as_bytes();
+
         // The Mat
-        let mat_dim = (((input.len()) as f32).sqrt().ceil()) as u32;
+        let mat_dim = self.dim;
         let mat_pixel_width = self.char_width * mat_dim;
         let mat_pixel_height = self.char_height * mat_dim;
         let images: Vec<&[Rgb<u8>]> = self.font.chunks((self.char_width * self.char_height) as usize).collect();
@@ -168,9 +231,6 @@ impl Mat {
             }
         }
     
-        // Color
-        let (color1, color2, color3) = pick_color(input);
-    
         // Output Image
         let mut img_buffer = ImageBuffer::new(mat_pixel_width as u32, mat_pixel_height as u32);
     
@@ -178,7 +238,7 @@ impl Mat {
          * FILL OUT MAT PATTERNS =
          *========================*/
         // Find Out Where Each Pattern Goes
-        let pos = spiral_walker(mat_dim);
+        let trav_path = spiral_walker(mat_dim);
     
         // Check Spiral
         // let answer = spiral_walker(mat_dim);
@@ -197,28 +257,108 @@ impl Mat {
                 let y = (i / self.char_width as usize) as u32;
                 let mut rgb_val = pixel.0;
     
-                if rgb_val[0] != 0xFF {
-                    rgb_val[0] = color1;
+                if rgb_val[0] == 0xFF {
+                    rgb_val[0] = self.primary.0;
                 } else {
-                    rgb_val[0] = !color1;
+                    rgb_val[0] = self.secondary.0;
                 }
-                if rgb_val[1] != 0xFF {
-                    rgb_val[1] = color2;
+                if rgb_val[1] == 0xFF {
+                    rgb_val[1] = self.primary.1;
                 } else {
-                    rgb_val[1] = !color2;
+                    rgb_val[1] = self.secondary.1;
                 }
-                if rgb_val[2] != 0xFF {
-                    rgb_val[2] = color3;
+                if rgb_val[2] == 0xFF {
+                    rgb_val[2] = self.primary.2;
                 } else {
-                    rgb_val[2] = !color3;
+                    rgb_val[2] = self.secondary.2;
                 }
-                img_buffer.put_pixel(x+pos[idx].0*self.char_width, y+pos[idx].1*self.char_height, Rgb(rgb_val));
+                img_buffer.put_pixel(x+trav_path[idx].0*self.char_width, y+trav_path[idx].1*self.char_height, Rgb(rgb_val));
             }
         }
     
         // Save the ImageBuffer as an image file (e.g., PNG)
         let file_path = format!("{}.png", name);
         img_buffer.save(file_path).expect("Failed to save image chunk");
+        println!("Rune Succeeded! See \"{}.png\"", name);
+    }
+    
+    pub fn decode(&mut self, path: &str) -> Vec<u8> {
+
+        println!("Decoding {}...", path);
+        //println!("Char width = {}, Char height = {}", self.char_width, self.char_height);
+        let mut decoded_input: Vec<u8> = Vec::new(); 
+
+        // Open the file that needs decoding.
+        // Read file as an array of pixels.
+        let filepath = path.to_string();
+        let buf = image::open(filepath).unwrap().into_rgb8();
+        let mut source: Vec<Rgb<u8>> = Vec::new();
+        
+        // Find the order in which mat patterns are read.
+        let trav_path: Vec<(u32, u32)> = spiral_walker(self.dim);
+
+        for (sector_x, sector_y) in trav_path.iter() {
+            let start_x = sector_x * self.char_width;
+            let start_y = sector_y * self.char_height;
+            let end_x = start_x + self.char_width;
+            let end_y = start_y + self.char_height;
+            for y in start_y..end_y {
+                for x in start_x..end_x {
+                    let pixel = buf.get_pixel(x, y).0;
+                    source.push(Rgb(pixel));
+                }
+            }
+        }
+
+        // Make array of addresses for image chunks.
+        let pixels_per_image: usize = (self.char_width * self.char_height) as usize;
+        let src_img_chunks: Vec<&[Rgb<u8>]> = source.chunks(pixels_per_image).collect();
+
+        // Iterate over image.
+        let primary_rgb = self.primary;
+        let background_rgb = self.secondary;
+
+        for i in 0..trav_path.len() {
+            let mut left_hex: u8 = 0;
+            let mut right_hex: u8 = 0;
+            let image_chunk = src_img_chunks[i];
+            let l_one = image_chunk[ix2d(self.char_width, 1, 0)].0;
+            let l_two = image_chunk[ix2d(self.char_width, 1, 1)].0;
+            let l_four = image_chunk[ix2d(self.char_width, 1, self.char_height-1-1)].0;
+            let l_eig = image_chunk[ix2d(self.char_width, 1, self.char_height-1)].0;
+            let r_one = image_chunk[ix2d(self.char_width, self.char_width-1-1, 0)].0;
+            let r_two = image_chunk[ix2d(self.char_width, self.char_width-1-1, 1)].0;
+            let r_four = image_chunk[ix2d(self.char_width, self.char_width-1-1, self.char_height-1-1)].0;
+            let r_eig = image_chunk[ix2d(self.char_width, self.char_width-1-1, self.char_height-1)].0;
+    
+            // for (idx, item) in image_chunk.iter().enumerate() {
+            //     let item_ix = item.0;
+            //     if ((idx % self.char_width as usize) == 0) {
+            //         println!("");
+            //     }
+            //     if item_ix[0] == self.primary.0 && item_ix[1] == self.primary.1 && item_ix[2] == self.primary.2 {
+            //         print!("■");
+            //     }
+            //     else {
+            //         print!("□");
+            //     }
+            // }
+            // println!("");
+
+            if l_one[0]  == primary_rgb.0 && l_one[1] == primary_rgb.1 && l_one[2] == primary_rgb.2 { left_hex += 1; }
+            if l_two[0]  == primary_rgb.0 && l_two[1] == primary_rgb.1 && l_two[2] == primary_rgb.2 { left_hex += 2; }
+            if l_four[0] == primary_rgb.0 && l_four[1] == primary_rgb.1 && l_four[2] == primary_rgb.2 { left_hex += 4; }
+            if l_eig[0]  == primary_rgb.0 && l_eig[1] == primary_rgb.1 && l_eig[2] == primary_rgb.2 { left_hex += 8; }
+            //println!("left = {}", left_hex);
+            if r_one[0]  == primary_rgb.0 && r_one[1] == primary_rgb.1 && r_one[2] == primary_rgb.2 { right_hex += 1; }
+            if r_two[0]  == primary_rgb.0 && r_two[1] == primary_rgb.1 && r_two[2] == primary_rgb.2 { right_hex += 2; }
+            if r_four[0] == primary_rgb.0 && r_four[1] == primary_rgb.1 && r_four[2] == primary_rgb.2 { right_hex += 4; }
+            if r_eig[0]  == primary_rgb.0 && r_eig[1] == primary_rgb.1 && r_eig[2] == primary_rgb.2 { right_hex += 8; }
+            //println!("right = {}", right_hex);
+            decoded_input.push((left_hex << 4) | right_hex);
+        }
+        //println!("{:?}", decoded_input);
+        decoded_input
     }
 
 }
